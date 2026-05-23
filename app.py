@@ -10,6 +10,9 @@ app = Flask(__name__)
 # Složka pro dočasné soubory
 DOWNLOAD_DIR = tempfile.mkdtemp()
 
+# Cesta k cookies souboru (musí být v root složce repozitáře)
+COOKIES_FILE = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+
 def cleanup_old_files():
     """Maže soubory starší než 10 minut"""
     while True:
@@ -23,9 +26,20 @@ def cleanup_old_files():
 # Spusť cleanup thread
 threading.Thread(target=cleanup_old_files, daemon=True).start()
 
+def get_ydl_opts_base():
+    """Základní options společné pro info i download"""
+    opts = {
+        'quiet': True,
+        'no_warnings': False,
+    }
+    if os.path.exists(COOKIES_FILE):
+        opts['cookiefile'] = COOKIES_FILE
+    return opts
+
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'})
+    cookies_ok = os.path.exists(COOKIES_FILE)
+    return jsonify({'status': 'ok', 'cookies': cookies_ok})
 
 @app.route('/info', methods=['POST'])
 def get_info():
@@ -36,7 +50,8 @@ def get_info():
         return jsonify({'error': 'Missing url'}), 400
 
     try:
-        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+        opts = get_ydl_opts_base()
+        with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return jsonify({
                 'title': info.get('title', 'Unknown'),
@@ -57,10 +72,9 @@ def download():
 
     try:
         output_path = os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s')
-        
-        ydl_opts = {
-            'cookiefile': 'cookies.txt',
-            'quiet': True,
+
+        opts = get_ydl_opts_base()
+        opts.update({
             'format': 'bestaudio/best',
             'outtmpl': output_path,
             'postprocessors': [{
@@ -68,13 +82,11 @@ def download():
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }],
-            'quiet': True
-        }
+        })
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
             title = info.get('title', 'audio')
-            # Najdi stažený soubor
             safe_title = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
             mp3_path = os.path.splitext(safe_title)[0] + '.mp3'
 
