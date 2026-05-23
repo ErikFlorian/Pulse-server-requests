@@ -11,12 +11,11 @@ app = Flask(__name__)
 DOWNLOAD_DIR = tempfile.mkdtemp()
 COOKIES_FILE = os.path.join(os.path.dirname(__file__), 'cookies.txt')
 
-# Přidej Node.js do PATH aby ho yt-dlp našel
+# Přidej Node.js do PATH
 node_path = shutil.which('node')
 if node_path:
     node_dir = os.path.dirname(node_path)
     os.environ['PATH'] = node_dir + ':' + os.environ.get('PATH', '')
-    os.environ['NODE_PATH'] = node_path
 
 def cleanup_old_files():
     while True:
@@ -30,25 +29,19 @@ def cleanup_old_files():
 threading.Thread(target=cleanup_old_files, daemon=True).start()
 
 def get_ydl_opts_base():
-    opts = {
-        'quiet': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['tv_embedded', 'web'],
-            }
-        },
-    }
+    opts = {'quiet': False}  # Necháme výstup pro debugging
     if os.path.exists(COOKIES_FILE):
         opts['cookiefile'] = COOKIES_FILE
     return opts
 
 @app.route('/health')
 def health():
+    import yt_dlp.version
     return jsonify({
         'status': 'ok',
         'cookies': os.path.exists(COOKIES_FILE),
         'node': shutil.which('node') or 'not found',
-        'path': os.environ.get('PATH', '')
+        'yt_dlp_version': yt_dlp.version.__version__
     })
 
 @app.route('/info', methods=['POST'])
@@ -78,7 +71,6 @@ def download():
         return jsonify({'error': 'Missing url'}), 400
     try:
         output_path = os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s')
-
         opts = get_ydl_opts_base()
         opts.update({
             'format': 'bestaudio/best',

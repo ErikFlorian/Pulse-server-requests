@@ -2,12 +2,11 @@ services:
   - type: web
     name: pulse-server
     env: python
-    buildCommand: |
-      pip install -r requirements.txt &&
-      pip install yt-dlp --upgrade &&
+    buildCommand: >
       curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
       apt-get install -y nodejs &&
-      yt-dlp --update-to nightly
+      pip install flask &&
+      pip install -U "yt-dlp[default]"
     startCommand: "python app.py"
     envVars:
       - key: PORT
