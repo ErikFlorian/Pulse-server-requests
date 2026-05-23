@@ -59,6 +59,8 @@ def download():
         output_path = os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s')
         
         ydl_opts = {
+            'cookiefile': 'cookies.txt',
+            'quiet': True,
             'format': 'bestaudio/best',
             'outtmpl': output_path,
             'postprocessors': [{
