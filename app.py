@@ -4,11 +4,19 @@ import os
 import tempfile
 import threading
 import time
+import shutil
 
 app = Flask(__name__)
 
 DOWNLOAD_DIR = tempfile.mkdtemp()
 COOKIES_FILE = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+
+# Přidej Node.js do PATH aby ho yt-dlp našel
+node_path = shutil.which('node')
+if node_path:
+    node_dir = os.path.dirname(node_path)
+    os.environ['PATH'] = node_dir + ':' + os.environ.get('PATH', '')
+    os.environ['NODE_PATH'] = node_path
 
 def cleanup_old_files():
     while True:
@@ -24,6 +32,11 @@ threading.Thread(target=cleanup_old_files, daemon=True).start()
 def get_ydl_opts_base():
     opts = {
         'quiet': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['tv_embedded', 'web'],
+            }
+        },
     }
     if os.path.exists(COOKIES_FILE):
         opts['cookiefile'] = COOKIES_FILE
@@ -31,12 +44,11 @@ def get_ydl_opts_base():
 
 @app.route('/health')
 def health():
-    import shutil
-    node = shutil.which('node')
     return jsonify({
         'status': 'ok',
         'cookies': os.path.exists(COOKIES_FILE),
-        'node': node or 'not found'
+        'node': shutil.which('node') or 'not found',
+        'path': os.environ.get('PATH', '')
     })
 
 @app.route('/info', methods=['POST'])
