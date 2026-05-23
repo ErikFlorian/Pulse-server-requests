@@ -24,12 +24,6 @@ threading.Thread(target=cleanup_old_files, daemon=True).start()
 def get_ydl_opts_base():
     opts = {
         'quiet': True,
-        # iOS client nepotřebuje JS signature solving
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['ios', 'web_embedded'],
-            }
-        },
     }
     if os.path.exists(COOKIES_FILE):
         opts['cookiefile'] = COOKIES_FILE
@@ -37,7 +31,13 @@ def get_ydl_opts_base():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok', 'cookies': os.path.exists(COOKIES_FILE)})
+    import shutil
+    node = shutil.which('node')
+    return jsonify({
+        'status': 'ok',
+        'cookies': os.path.exists(COOKIES_FILE),
+        'node': node or 'not found'
+    })
 
 @app.route('/info', methods=['POST'])
 def get_info():

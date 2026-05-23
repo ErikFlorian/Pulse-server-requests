@@ -1,8 +1,13 @@
 services:
   - type: web
-    name: pulse-music-server
+    name: pulse-server
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: |
+      pip install -r requirements.txt &&
+      pip install yt-dlp --upgrade &&
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
+      apt-get install -y nodejs &&
+      yt-dlp --update-to nightly
     startCommand: "python app.py"
     envVars:
       - key: PORT
