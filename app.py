@@ -5,17 +5,17 @@ import tempfile
 import threading
 import time
 import shutil
+import subprocess
 
 app = Flask(__name__)
 
 DOWNLOAD_DIR = tempfile.mkdtemp()
 COOKIES_FILE = os.path.join(os.path.dirname(__file__), 'cookies.txt')
 
-# Přidej Node.js do PATH
-node_path = shutil.which('node')
-if node_path:
-    node_dir = os.path.dirname(node_path)
-    os.environ['PATH'] = node_dir + ':' + os.environ.get('PATH', '')
+for node_dir in ['/usr/bin', '/usr/local/bin']:
+    if os.path.exists(os.path.join(node_dir, 'node')):
+        os.environ['PATH'] = node_dir + ':' + os.environ.get('PATH', '')
+        break
 
 def cleanup_old_files():
     while True:
@@ -29,7 +29,7 @@ def cleanup_old_files():
 threading.Thread(target=cleanup_old_files, daemon=True).start()
 
 def get_ydl_opts_base():
-    opts = {'quiet': False}  # Necháme výstup pro debugging
+    opts = {'quiet': False}
     if os.path.exists(COOKIES_FILE):
         opts['cookiefile'] = COOKIES_FILE
     return opts
@@ -37,12 +37,37 @@ def get_ydl_opts_base():
 @app.route('/health')
 def health():
     import yt_dlp.version
+    try:
+        node_ver = subprocess.check_output(['node', '--version'], timeout=5).decode().strip()
+    except Exception as e:
+        node_ver = f'error: {e}'
     return jsonify({
         'status': 'ok',
         'cookies': os.path.exists(COOKIES_FILE),
-        'node': shutil.which('node') or 'not found',
-        'yt_dlp_version': yt_dlp.version.__version__
+        'node_version': node_ver,
+        'yt_dlp_version': yt_dlp.version.__version__,
     })
+
+@app.route('/test', methods=['GET'])
+def test_download():
+    """Vypíše všechny dostupné formáty"""
+    try:
+        opts = get_ydl_opts_base()
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(
+                'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                download=False
+            )
+            formats = [{
+                'id': f.get('format_id'),
+                'ext': f.get('ext'),
+                'acodec': f.get('acodec'),
+                'vcodec': f.get('vcodec'),
+                'abr': f.get('abr'),
+            } for f in info.get('formats', [])]
+            return jsonify({'title': info.get('title'), 'formats': formats})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/info', methods=['POST'])
 def get_info():
@@ -73,7 +98,8 @@ def download():
         output_path = os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s')
         opts = get_ydl_opts_base()
         opts.update({
-            'format': 'bestaudio/best',
+            # Vezmi nejlepší audio bez video, nebo cokoliv co má audio
+            'format': 'bestaudio/bestaudio*',
             'outtmpl': output_path,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
